@@ -6,11 +6,12 @@ you can point a script at later).
 """
 import random
 from pathlib import Path
+import pandas as pd
 
 from faker import Faker
 from models import Conversation, Unit, get_session
 
-fake = Faker()
+# fake = Faker()
 
 CITIES = ["Cairo", "Riyadh", "Jeddah", "Dubai", "Alexandria", "Doha"]
 DISTRICTS = ["Downtown", "New Capital", "Al Olaya", "Marina", "Business Bay", "Zamalek"]
@@ -54,9 +55,32 @@ def generate_unit():
         description=fake.paragraph(nb_sentences=4),
     )
 
+def read_units(path):
+    df = pd.read_csv(path)
+    units = [
+    Unit(
+        city=row["city"],
+        district=row["district"],
+        unit_type=row["unit_type"],
+        price=float(row["price"]),
+        bedrooms=int(row["bedrooms"]),
+        bathrooms=int(row["bathrooms"]),
+        area_sqm=float(row["area_sqm"]),
+        # Convert numeric 1.0/0.0/NaN to boolean or None
+        is_available=(
+            bool(row["is_available"]) if pd.notna(row["is_available"]) else None
+        ),
+        description=row["description"],
+    )
+    for _, row in df.iterrows()
+    ]
+    return units
 
-def seed_units(session, n=NUM_UNITS):
-    units = [generate_unit() for _ in range(n)]
+def seed_units(session, n=NUM_UNITS, read_data=True):
+    if read_data:
+        units = read_units(path='eval//sample_units//units_data.csv')
+    else:
+        units = [generate_unit() for _ in range(n)]
     session.bulk_save_objects(units)
     session.commit()
     print(f"Seeded {n} units.")
@@ -99,7 +123,7 @@ def seed_sample_documents(out_dir="eval/sample_documents", n=30):
 
 if __name__ == "__main__":
     session = get_session()
-    seed_units(session)
-    seed_conversations(session)
-    seed_sample_documents()
+    seed_units(session, n=NUM_UNITS, read_data=True)
+    # seed_conversations(session)
+    # seed_sample_documents()
     session.close()

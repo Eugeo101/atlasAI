@@ -14,5 +14,6 @@ scrape_configs:
   # internal compose network (not localhost, which inside this container
   # is Prometheus itself). Default metrics_path /metrics is correct.
   - job_name: "vllm"
+    scheme: https
     static_configs:
-      - targets: ["vllm:8000"]
+      - targets: ["eagle-introduce-monster-vatican.trycloudflare.com:443"]
