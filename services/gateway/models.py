@@ -17,10 +17,13 @@ from sqlalchemy import (
     create_engine,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
+from dotenv import load_dotenv
+from pathlib import Path
+target_dir = Path(__file__).resolve().parents[2]
+load_dotenv(target_dir / '.env.example')
 
 DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://realestate:realestate@localhost:5432/realestate"
+    "DATABASE_URL"
 )
 
 Base = declarative_base()

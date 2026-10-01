@@ -16,4 +16,4 @@ scrape_configs:
   - job_name: "vllm"
     scheme: https
     static_configs:
-      - targets: ["eagle-introduce-monster-vatican.trycloudflare.com:443"]
+      - targets: ["necessary-fruit-comparing-potential.trycloudflare.com:443"]

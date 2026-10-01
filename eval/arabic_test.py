@@ -74,6 +74,7 @@ def run_smoke_test():
         print("-" * 60)
         print(f"📤 MODEL OUTPUT (Generated in {latency:.2f}s):\n")
         print(output_text)
+        
         print("-" * 60)
         
         # Manual Check Checklist

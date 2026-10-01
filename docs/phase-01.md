@@ -1,27 +1,103 @@
-What Day 10 produced
+## After reading build-log.md start reading this:
 
-experiments/baseline-report.md — real numbers at all four concurrency levels, 0 failures throughout:
-
-┌─────────────┬──────────┬──────────┬────────────────┬─────────────┬──────────┐
-│ Concurrency │ p95 TTFT │ p95 TPOT │ p95 end-to-end │ Throughput  │ Tokens/s │
-├─────────────┼──────────┼──────────┼────────────────┼─────────────┼──────────┤
-│ 1           │ 39 ms    │ 9.5 ms   │ 2.38 s         │ 1.14 req/s  │ 105      │
-├─────────────┼──────────┼──────────┼────────────────┼─────────────┼──────────┤
-│ 4           │ 40 ms    │ 11.4 ms  │ 2.72 s         │ 4.03 req/s  │ 391      │
-├─────────────┼──────────┼──────────┼────────────────┼─────────────┼──────────┤
-│ 16          │ 67 ms    │ 125 ms   │ 4.23 s         │ 10.56 req/s │ 957      │
-├─────────────┼──────────┼──────────┼────────────────┼─────────────┼──────────┤
-│ 64          │ 97 ms    │ 48 ms    │ 5.01 s         │ 20.44 req/s │ 1963     │
-└─────────────┴──────────┴──────────┴────────────────┴─────────────┴──────────┘
-
-The reusable driver is experiments/baseline_runner.py — when you move to the L40S, python3 experiments/baseline_runner.py regenerates the whole report. The report and build-log both state loudly that this is RTX 5060 (8 GB), not L40S, and that the L40S re-run replaces these numbers.
-
-How to read it: TTFT is tiny (39–97 ms) because it's a 3B model on short prompts — the real cost of load shows up as end-to-end p95 climbing (2.4s → 5.0s) as requests queue, while token throughput scales cleanly to ~2000 tok/s. (The TPOT column is noisy — a bucket-granularity artifact of the delta-quantile math; trust the trend, not the third digit.)
-
-Phase 1 exit criteria ✅. Do not start Phase 2 until the L40S re-run is a deliberate decision.
-
+### Day 1 (read until Day 10)
 ---
-How to watch metrics / logs / traces
 
-You have three observability tools in compose, at very different readiness levels. Here's the honest state and how to use each.
+### 1) Hybrid vLLM Setup & Execution Log
 
+* **Colab GPU Offloading (vLLM):**
+* Offloaded `Qwen/Qwen2.5-3B-Instruct-AWQ` to a free Google Colab T4 GPU to bypass local GPU requirements.
+* **Technique:** Served vLLM on port `8000` in Colab and exposed it via an HTTPS tunnel using `cloudflared` (Cloudflare Tunnel).
+* **Notebook Reference:** Full notebook setup and execution cell saved in `playbook/playbook.ipynb`.
+* **Compose adjustment:** Updated local `.env` (`VLLM_BASE_URL=https://<subdomain>[.trycloudflare.com/v1](https://.trycloudflare.com/v1)`) and commented out the local `vllm` service dependency in `docker-compose.yml`.
+
+
+
+### 2) Sequential Execution & Test Commands
+
+```bash
+# 1. Spin up core database and admin UI locally
+docker compose up -d postgres adminer
+
+# 2. Run one-off database migration & seed 1,000 property records
+docker compose --profile tools run --rm migrate
+
+# 3. Verify database seeding (expected output: 1000)
+docker exec -it realestate-postgres psql -U realestate -d realestate -c "SELECT count(*) FROM units;"
+```
+
+**Check Adminer UI for database on:**
+
+http://localhost:8082/
+
+### 3) For rest of commands
+
+
+**- run rest of services**
+```bash
+# 1. Spin up local gateway & observability stack (without local vLLM)
+docker compose up -d gateway redis qdrant prometheus grafana otel-collector
+[or]
+docker compuse up -d # and will run all except what is actually running now
+```
+
+**- Dynamic vLLM Endpoint Update (When Colab Restarts)**
+```bash
+Update VLLM_BASE_URL in .env & compose.yml **with the new Cloudflare link**
+VLLM_BASE_URL=https://<new-subdomain>[.trycloudflare.com/v1](https://.trycloudflare.com/v1)
+docker compose up -d gateway # Reload Gateway service
+```
+
+**- Verification Checklist**
+
+* 1) Terminal Commands
+Check service health: docker compose ps (All should show Up / Healthy)
+Verify 1,000 seeded DB rows using:
+
+```bash
+docker exec -it realestate-postgres psql -U realestate -d realestate -c "SELECT count(*) FROM units;"
+```
+
+* 2) Test Gateway health:
+```bash
+curl http://localhost:8081/health
+```
+
+* 3) Test Gateway -> Colab vLLM pass-through:
+
+```bash
+curl http://localhost:8081/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Qwen/Qwen2.5-3B-Instruct-AWQ","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+* 4) Verify OTel Collector logs:
+```bash
+docker compose logs otel-collector
+```
+
+* 5) Local Browser Endpoints
+    * Gateway Swagger:
+
+        http://localhost:8081/docs
+
+    * Adminer (Postgres UI):
+    
+        http://localhost:8082 (System: Postgres | Server: postgres | User/Pass/DB: realestate)
+    
+    * Qdrant Dashboard: 
+    
+        http://localhost:6333/dashboard
+    
+    * Prometheus Targets: 
+    
+        http://localhost:9090/targets (Verify target state is UP)
+    
+    * Grafana: 
+    
+        http://localhost:3000 (Login: admin / admin)
+
+**- Cleanup Compose containers**
+```bash
+docker compose down
+```
